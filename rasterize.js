@@ -1108,7 +1108,6 @@ function renderModels() {
         gl.uniform3fv(diffuseULoc, currSet.material.diffuse);
         gl.uniform3fv(specularULoc, currSet.material.specular);
         gl.uniform1f(shininessULoc, currSet.material.n);
-        gl.uniform1f(alphaULoc, currSet.material.alpha);
         
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, textureBuffers[whichTriSet]);
