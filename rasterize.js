@@ -539,6 +539,7 @@
 
 /* GLOBAL CONSTANTS AND VARIABLES */
 
+/* assignment specific globals */
 const INPUT_TRIANGLES_URL = "https://ncsucgclass.github.io/prog4/triangles.json";
 const INPUT_ELLIPSOIDS_URL = "https://ncsucgclass.github.io/prog4/ellipsoids.json";
 var defaultEye = vec3.fromValues(0.5,0.5,-0.5);
@@ -562,7 +563,7 @@ var numTriangleSets = 0;
 var inputEllipsoids = [];
 var numEllipsoids = 0;
 var vertexBuffers = [];
-var normalBuffers = [];
+var normalBuffers = []; // Added for lighting
 var uvBuffers = [];
 var triSetSizes = [];
 var triangleBuffers = [];
@@ -570,19 +571,30 @@ var textureBuffers = [];
 var viewDelta = 0;
 
 /* shader parameter locations */
-var vPosAttribLoc, vNormAttribLoc, vUVAttribLoc;
-var pvmMatrixULoc, mMatrixULoc, nMatrixULoc;
-var textureULoc, eyePosULoc, lightPosULoc;
-var lightAmbientULoc, lightDiffuseULoc, lightSpecularULoc;
-var ambientULoc, diffuseULoc, specularULoc, shininessULoc;
-var blendModeULoc;
+var vPosAttribLoc;
+var vNormAttribLoc; // Added for lighting
+var vUVAttribLoc;
+var pvmMatrixULoc;
+var mMatrixULoc; // Added for lighting calculations
+var nMatrixULoc; // Added for normal transformation
+var textureULoc;
+var eyePosULoc; // Added for lighting
+var lightPosULoc; // Added for lighting
+var lightAmbientULoc; // Added for lighting
+var lightDiffuseULoc; // Added for lighting
+var lightSpecularULoc; // Added for lighting
+var ambientULoc; // Added for material
+var diffuseULoc; // Added for material
+var specularULoc; // Added for material
+var shininessULoc; // Added for material
+var blendModeULoc; // Added for blend mode toggle
 
 /* interaction variables */
 var Eye = vec3.clone(defaultEye);
 var Center = vec3.clone(defaultCenter);
 var Up = vec3.clone(defaultUp);
 
-// Get JSON file
+// get the JSON file from the passed URL
 function getJSONFile(url,descr) {
     try {
         if ((typeof(url) !== "string") || (typeof(descr) !== "string"))
@@ -607,7 +619,7 @@ function getJSONFile(url,descr) {
     }
 }
 
-// Load texture
+// load texture from URL
 function loadTexture(url) {
     var texture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, texture);
@@ -631,20 +643,9 @@ function loadTexture(url) {
     return texture;
 }
 
-// Update mode indicator
-function updateModeIndicator() {
-    var modeText = document.getElementById('modeText');
-    if (blendMode === 0) {
-        modeText.textContent = "Replace (Texture Only)";
-        modeText.style.color = "#cc6600";
-    } else {
-        modeText.textContent = "Modulate (Texture × Lighting)";
-        modeText.style.color = "#006600";
-    }
-}
-
-// Handle key press
+// does stuff when keys are pressed
 function handleKeyDown(event) {
+    
     const modelEnum = {TRIANGLES: "triangles", ELLIPSOID: "ellipsoid"};
     const dirEnum = {NEGATIVE: -1, POSITIVE: 1};
     
@@ -681,6 +682,8 @@ function handleKeyDown(event) {
     handleKeyDown.modelOn = handleKeyDown.modelOn == undefined ? null : handleKeyDown.modelOn;
 
     switch (event.code) {
+        
+        // model selection
         case "Space": 
             if (handleKeyDown.modelOn != null)
                 handleKeyDown.modelOn.on = false;
@@ -700,14 +703,13 @@ function handleKeyDown(event) {
             highlightModel(modelEnum.ELLIPSOID,(handleKeyDown.whichOn > 0) ? handleKeyDown.whichOn-1 : numEllipsoids-1);
             break;
             
-        // BLEND MODE TOGGLE
+        // BLEND MODE TOGGLE - Added
         case "KeyB":
             blendMode = (blendMode + 1) % 2;
             console.log("Blend mode: " + (blendMode === 0 ? "Replace (texture only)" : "Modulate (texture × lighting)"));
-            updateModeIndicator();
             break;
             
-        // View controls
+        // view change
         case "KeyA":
             Center = vec3.add(Center,Center,vec3.scale(temp,viewRight,viewDelta));
             if (!event.getModifierState("Shift"))
@@ -758,7 +760,7 @@ function handleKeyDown(event) {
             Up = vec3.copy(Up,defaultUp);
             break;
             
-        // Model transformation
+        // model transformation
         case "KeyK":
             if (event.getModifierState("Shift"))
                 rotateModel(Up,dirEnum.NEGATIVE);
@@ -810,13 +812,14 @@ function handleKeyDown(event) {
     }
 }
 
-// Setup WebGL
+// set up the webGL environment
 function setupWebGL() {
+    
     document.onkeydown = handleKeyDown;
 
     var imageCanvas = document.getElementById("myImageCanvas");
     var cw = imageCanvas.width, ch = imageCanvas.height; 
-    var imageContext = imageCanvas.getContext("2d"); 
+    imageContext = imageCanvas.getContext("2d"); 
     var bkgdImage = new Image(); 
     bkgdImage.crossOrigin = "Anonymous";
     bkgdImage.src = "https://ncsucgclass.github.io/prog3/sky.jpg";
@@ -841,8 +844,9 @@ function setupWebGL() {
     }
 }
 
-// Load models
+// read models in, load them into webgl buffers
 function loadModels() {
+    
     inputTriangles = getJSONFile(INPUT_TRIANGLES_URL,"triangles");
 
     try {
@@ -855,6 +859,7 @@ function loadModels() {
         
             numTriangleSets = inputTriangles.length;
             for (var whichSet=0; whichSet<numTriangleSets; whichSet++) {
+                
                 inputTriangles[whichSet].center = vec3.fromValues(0,0,0);
                 inputTriangles[whichSet].on = false;
                 inputTriangles[whichSet].translation = vec3.fromValues(0,0,0);
@@ -862,16 +867,16 @@ function loadModels() {
                 inputTriangles[whichSet].yAxis = vec3.fromValues(0,1,0);
 
                 inputTriangles[whichSet].glVertices = [];
-                inputTriangles[whichSet].glNormals = [];
+                inputTriangles[whichSet].glNormals = []; // Added for lighting
                 inputTriangles[whichSet].glUVs = [];
                 var numVerts = inputTriangles[whichSet].vertices.length;
                 for (whichSetVert=0; whichSetVert<numVerts; whichSetVert++) {
                     vtxToAdd = inputTriangles[whichSet].vertices[whichSetVert];
-                    normToAdd = inputTriangles[whichSet].normals[whichSetVert];
+                    normToAdd = inputTriangles[whichSet].normals[whichSetVert]; // Added for lighting
                     uvToAdd = inputTriangles[whichSet].uvs[whichSetVert];
                     inputTriangles[whichSet].glVertices.push(vtxToAdd[0],vtxToAdd[1],vtxToAdd[2]);
-                    inputTriangles[whichSet].glNormals.push(normToAdd[0],normToAdd[1],normToAdd[2]);
-                    inputTriangles[whichSet].glUVs.push(uvToAdd[0], 1.0 - uvToAdd[1]);
+                    inputTriangles[whichSet].glNormals.push(normToAdd[0],normToAdd[1],normToAdd[2]); // Added for lighting
+                    inputTriangles[whichSet].glUVs.push(uvToAdd[0], 1.0 - uvToAdd[1]); // Flip V coordinate
                     vec3.max(maxCorner,maxCorner,vtxToAdd);
                     vec3.min(minCorner,minCorner,vtxToAdd);
                     vec3.add(inputTriangles[whichSet].center,inputTriangles[whichSet].center,vtxToAdd);
@@ -882,6 +887,7 @@ function loadModels() {
                 gl.bindBuffer(gl.ARRAY_BUFFER,vertexBuffers[whichSet]);
                 gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(inputTriangles[whichSet].glVertices),gl.STATIC_DRAW);
                 
+                // Added normal buffer for lighting
                 normalBuffers[whichSet] = gl.createBuffer();
                 gl.bindBuffer(gl.ARRAY_BUFFER,normalBuffers[whichSet]);
                 gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(inputTriangles[whichSet].glNormals),gl.STATIC_DRAW);
@@ -913,8 +919,10 @@ function loadModels() {
     }
 }
 
-// Setup shaders
+// setup the webGL shaders
 function setupShaders() {
+    
+    // Updated vertex shader with lighting support
     var vShaderCode = `
         attribute vec3 aVertexPosition;
         attribute vec3 aVertexNormal;
@@ -937,6 +945,7 @@ function setupShaders() {
         }
     `;
     
+    // Updated fragment shader with lighting and blend modes
     var fShaderCode = `
         precision mediump float;
 
@@ -957,26 +966,35 @@ function setupShaders() {
         varying vec2 vUV;
             
         void main(void) {
+            // Get texture color
             vec4 texColor = texture2D(uTexture, vUV);
             
+            // Calculate lighting (Phong model)
             vec3 N = normalize(vNormal);
             vec3 L = normalize(uLightPos - vWorldPos);
             vec3 V = normalize(uEyePos - vWorldPos);
             vec3 R = reflect(-L, N);
             
+            // Ambient component
             vec3 ambient = uAmbient * uLightAmbient;
             
+            // Diffuse component
             float diffuseFactor = max(dot(N, L), 0.0);
             vec3 diffuse = uDiffuse * uLightDiffuse * diffuseFactor;
             
+            // Specular component
             float specularFactor = pow(max(dot(R, V), 0.0), uShininess);
             vec3 specular = uSpecular * uLightSpecular * specularFactor;
             
+            // Combine lighting components
             vec3 litColor = ambient + diffuse + specular;
             
+            // Apply blend mode
             if (uBlendMode == 0) {
+                // Replace mode: texture only (no lighting)
                 gl_FragColor = texColor;
             } else {
+                // Modulate mode: texture × lighting
                 gl_FragColor = vec4(texColor.rgb * litColor, texColor.a);
             }
         }
@@ -1008,28 +1026,31 @@ function setupShaders() {
             } else {
                 gl.useProgram(shaderProgram);
                 
+                // Vertex attributes
                 vPosAttribLoc = gl.getAttribLocation(shaderProgram, "aVertexPosition");
                 gl.enableVertexAttribArray(vPosAttribLoc);
-                vNormAttribLoc = gl.getAttribLocation(shaderProgram, "aVertexNormal");
+                vNormAttribLoc = gl.getAttribLocation(shaderProgram, "aVertexNormal"); // Added
                 gl.enableVertexAttribArray(vNormAttribLoc);
                 vUVAttribLoc = gl.getAttribLocation(shaderProgram, "aVertexUV");
                 gl.enableVertexAttribArray(vUVAttribLoc);
                 
+                // Matrix uniforms
                 pvmMatrixULoc = gl.getUniformLocation(shaderProgram, "upvmMatrix");
-                mMatrixULoc = gl.getUniformLocation(shaderProgram, "umMatrix");
-                nMatrixULoc = gl.getUniformLocation(shaderProgram, "unMatrix");
+                mMatrixULoc = gl.getUniformLocation(shaderProgram, "umMatrix"); // Added
+                nMatrixULoc = gl.getUniformLocation(shaderProgram, "unMatrix"); // Added
                 
+                // Texture and lighting uniforms
                 textureULoc = gl.getUniformLocation(shaderProgram, "uTexture");
-                eyePosULoc = gl.getUniformLocation(shaderProgram, "uEyePos");
-                lightPosULoc = gl.getUniformLocation(shaderProgram, "uLightPos");
-                lightAmbientULoc = gl.getUniformLocation(shaderProgram, "uLightAmbient");
-                lightDiffuseULoc = gl.getUniformLocation(shaderProgram, "uLightDiffuse");
-                lightSpecularULoc = gl.getUniformLocation(shaderProgram, "uLightSpecular");
-                ambientULoc = gl.getUniformLocation(shaderProgram, "uAmbient");
-                diffuseULoc = gl.getUniformLocation(shaderProgram, "uDiffuse");
-                specularULoc = gl.getUniformLocation(shaderProgram, "uSpecular");
-                shininessULoc = gl.getUniformLocation(shaderProgram, "uShininess");
-                blendModeULoc = gl.getUniformLocation(shaderProgram, "uBlendMode");
+                eyePosULoc = gl.getUniformLocation(shaderProgram, "uEyePos"); // Added
+                lightPosULoc = gl.getUniformLocation(shaderProgram, "uLightPos"); // Added
+                lightAmbientULoc = gl.getUniformLocation(shaderProgram, "uLightAmbient"); // Added
+                lightDiffuseULoc = gl.getUniformLocation(shaderProgram, "uLightDiffuse"); // Added
+                lightSpecularULoc = gl.getUniformLocation(shaderProgram, "uLightSpecular"); // Added
+                ambientULoc = gl.getUniformLocation(shaderProgram, "uAmbient"); // Added
+                diffuseULoc = gl.getUniformLocation(shaderProgram, "uDiffuse"); // Added
+                specularULoc = gl.getUniformLocation(shaderProgram, "uSpecular"); // Added
+                shininessULoc = gl.getUniformLocation(shaderProgram, "uShininess"); // Added
+                blendModeULoc = gl.getUniformLocation(shaderProgram, "uBlendMode"); // Added
             }
         }
     } catch(e) {
@@ -1037,8 +1058,9 @@ function setupShaders() {
     }
 }
 
-// Render models
+// render the loaded model
 function renderModels() {
+    
     function makeModelTransform(currModel) {
         var zAxis = vec3.create(), sumRotation = mat4.create(), temp = mat4.create(), negCtr = vec3.create();
 
@@ -1062,7 +1084,7 @@ function renderModels() {
     var pMatrix = mat4.create();
     var vMatrix = mat4.create();
     var mMatrix = mat4.create();
-    var nMatrix = mat4.create();
+    var nMatrix = mat4.create(); // Added for normal transformation
     var pvMatrix = mat4.create();
     var pvmMatrix = mat4.create();
     
@@ -1074,12 +1096,13 @@ function renderModels() {
     mat4.lookAt(vMatrix,Eye,Center,Up);
     mat4.multiply(pvMatrix,pMatrix,vMatrix);
 
+    // Set lighting uniforms (same for all models)
     gl.uniform3fv(eyePosULoc, Eye);
     gl.uniform3fv(lightPosULoc, lightPosition);
     gl.uniform3fv(lightAmbientULoc, lightAmbient);
     gl.uniform3fv(lightDiffuseULoc, lightDiffuse);
     gl.uniform3fv(lightSpecularULoc, lightSpecular);
-    gl.uniform1i(blendModeULoc, blendMode);
+    gl.uniform1i(blendModeULoc, blendMode); // Pass blend mode to shader
 
     var currSet;
     for (var whichTriSet=0; whichTriSet<numTriangleSets; whichTriSet++) {
@@ -1088,39 +1111,50 @@ function renderModels() {
         makeModelTransform(currSet);
         mat4.multiply(pvmMatrix,pvMatrix,mMatrix);
         gl.uniformMatrix4fv(pvmMatrixULoc, false, pvmMatrix);
-        gl.uniformMatrix4fv(mMatrixULoc, false, mMatrix);
+        gl.uniformMatrix4fv(mMatrixULoc, false, mMatrix); // Added
         
+        // Calculate and pass normal matrix (inverse transpose of model matrix)
         mat4.invert(nMatrix, mMatrix);
         mat4.transpose(nMatrix, nMatrix);
         gl.uniformMatrix4fv(nMatrixULoc, false, nMatrix);
         
+        // Set material properties
         gl.uniform3fv(ambientULoc, currSet.material.ambient);
         gl.uniform3fv(diffuseULoc, currSet.material.diffuse);
         gl.uniform3fv(specularULoc, currSet.material.specular);
         gl.uniform1f(shininessULoc, currSet.material.n);
         
+        // Activate texture
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, textureBuffers[whichTriSet]);
         gl.uniform1i(textureULoc, 0);
         
+        // Vertex buffer: activate and feed into vertex shader
         gl.bindBuffer(gl.ARRAY_BUFFER,vertexBuffers[whichTriSet]);
         gl.vertexAttribPointer(vPosAttribLoc,3,gl.FLOAT,false,0,0);
         
+        // Normal buffer: activate and feed into vertex shader (Added)
         gl.bindBuffer(gl.ARRAY_BUFFER,normalBuffers[whichTriSet]);
         gl.vertexAttribPointer(vNormAttribLoc,3,gl.FLOAT,false,0,0);
         
+        // UV buffer: activate and feed into vertex shader
         gl.bindBuffer(gl.ARRAY_BUFFER,uvBuffers[whichTriSet]);
         gl.vertexAttribPointer(vUVAttribLoc,2,gl.FLOAT,false,0,0);
 
+        // Triangle buffer: activate and render
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,triangleBuffers[whichTriSet]);
         gl.drawElements(gl.TRIANGLES,3*triSetSizes[whichTriSet],gl.UNSIGNED_SHORT,0);
     }
 }
 
+/* MAIN -- HERE is where execution begins after window load */
+
 function main() {
     setupWebGL();
     loadModels();
     setupShaders();
-    updateModeIndicator();
     renderModels();
 }
+
+// Start the program
+main();
