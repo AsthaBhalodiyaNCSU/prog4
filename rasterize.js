@@ -1038,7 +1038,6 @@ function setupShaders() {
                 diffuseULoc = gl.getUniformLocation(shaderProgram, "uDiffuse");
                 specularULoc = gl.getUniformLocation(shaderProgram, "uSpecular");
                 shininessULoc = gl.getUniformLocation(shaderProgram, "uShininess");
-                alphaULoc = gl.getUniformLocation(shaderProgram, "uAlpha");
                 blendModeULoc = gl.getUniformLocation(shaderProgram, "uBlendMode");
             }
         }
