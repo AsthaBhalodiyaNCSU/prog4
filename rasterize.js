@@ -587,6 +587,7 @@ var ambientULoc;
 var diffuseULoc;
 var specularULoc;
 var shininessULoc;
+var alphaULoc;
 var blendModeULoc;
 
 /* interaction variables */
@@ -831,6 +832,10 @@ function setupWebGL() {
             gl.clearColor(0.0, 0.0, 0.0, 0.0);
             gl.clearDepth(1.0);
             gl.enable(gl.DEPTH_TEST);
+            
+            // Enable blending for transparency
+            gl.enable(gl.BLEND);
+            gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
         }
     }
     catch(e) {
@@ -903,6 +908,10 @@ function loadModels() {
                 gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(inputTriangles[whichSet].glTriangles),gl.STATIC_DRAW);
 
                 var textureURL = inputTriangles[whichSet].material.texture;
+                // Add base URL if texture path is relative
+                if (!textureURL.startsWith('http')) {
+                    textureURL = "https://ncsucgclass.github.io/prog4/" + textureURL;
+                }
                 textureBuffers[whichSet] = loadTexture(textureURL);
             }
         
@@ -951,6 +960,7 @@ function setupShaders() {
         uniform vec3 uDiffuse;
         uniform vec3 uSpecular;
         uniform float uShininess;
+        uniform float uAlpha;
         uniform int uBlendMode;
         
         varying vec3 vWorldPos;
@@ -974,9 +984,9 @@ function setupShaders() {
             vec3 litColor = ambient + diffuse + specular;
             
             if (uBlendMode == 0) {
-                gl_FragColor = texColor;
+                gl_FragColor = vec4(texColor.rgb, texColor.a * uAlpha);
             } else {
-                gl_FragColor = vec4(texColor.rgb * litColor, texColor.a);
+                gl_FragColor = vec4(texColor.rgb * litColor, texColor.a * uAlpha);
             }
         }
     `;
@@ -1028,6 +1038,7 @@ function setupShaders() {
                 diffuseULoc = gl.getUniformLocation(shaderProgram, "uDiffuse");
                 specularULoc = gl.getUniformLocation(shaderProgram, "uSpecular");
                 shininessULoc = gl.getUniformLocation(shaderProgram, "uShininess");
+                alphaULoc = gl.getUniformLocation(shaderProgram, "uAlpha");
                 blendModeULoc = gl.getUniformLocation(shaderProgram, "uBlendMode");
             }
         }
@@ -1097,6 +1108,7 @@ function renderModels() {
         gl.uniform3fv(diffuseULoc, currSet.material.diffuse);
         gl.uniform3fv(specularULoc, currSet.material.specular);
         gl.uniform1f(shininessULoc, currSet.material.n);
+        gl.uniform1f(alphaULoc, currSet.material.alpha);
         
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, textureBuffers[whichTriSet]);
