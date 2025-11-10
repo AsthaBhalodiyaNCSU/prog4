@@ -1126,7 +1126,8 @@ function setupShaders() {
         varying vec2 vUV; // UV coordinate from vertex shader
             
         void main(void) {
-            gl_FragColor = texture2D(uTexture, vUV);
+            vec2 flippedUV = vec2(vUV.x, 1.0 - vUV.y);
+            gl_FragColor = texture2D(uTexture, flippedUV);
         }
     `;
     
