@@ -539,7 +539,6 @@
 
 /* GLOBAL CONSTANTS AND VARIABLES */
 
-/* assignment specific globals */
 const INPUT_TRIANGLES_URL = "https://ncsucgclass.github.io/prog4/triangles.json";
 const INPUT_ELLIPSOIDS_URL = "https://ncsucgclass.github.io/prog4/ellipsoids.json";
 var defaultEye = vec3.fromValues(0.5,0.5,-0.5);
@@ -571,23 +570,11 @@ var textureBuffers = [];
 var viewDelta = 0;
 
 /* shader parameter locations */
-var vPosAttribLoc;
-var vNormAttribLoc;
-var vUVAttribLoc;
-var pvmMatrixULoc;
-var mMatrixULoc;
-var nMatrixULoc;
-var textureULoc;
-var eyePosULoc;
-var lightPosULoc;
-var lightAmbientULoc;
-var lightDiffuseULoc;
-var lightSpecularULoc;
-var ambientULoc;
-var diffuseULoc;
-var specularULoc;
-var shininessULoc;
-var alphaULoc;
+var vPosAttribLoc, vNormAttribLoc, vUVAttribLoc;
+var pvmMatrixULoc, mMatrixULoc, nMatrixULoc;
+var textureULoc, eyePosULoc, lightPosULoc;
+var lightAmbientULoc, lightDiffuseULoc, lightSpecularULoc;
+var ambientULoc, diffuseULoc, specularULoc, shininessULoc;
 var blendModeULoc;
 
 /* interaction variables */
@@ -595,8 +582,7 @@ var Eye = vec3.clone(defaultEye);
 var Center = vec3.clone(defaultCenter);
 var Up = vec3.clone(defaultUp);
 
-// ASSIGNMENT HELPER FUNCTIONS
-
+// Get JSON file
 function getJSONFile(url,descr) {
     try {
         if ((typeof(url) !== "string") || (typeof(descr) !== "string"))
@@ -615,13 +601,13 @@ function getJSONFile(url,descr) {
             else
                 return JSON.parse(httpReq.response); 
         }
-    }
-    catch(e) {
+    } catch(e) {
         console.log(e);
         return(String.null);
     }
 }
 
+// Load texture
 function loadTexture(url) {
     var texture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, texture);
@@ -645,8 +631,20 @@ function loadTexture(url) {
     return texture;
 }
 
+// Update mode indicator
+function updateModeIndicator() {
+    var modeText = document.getElementById('modeText');
+    if (blendMode === 0) {
+        modeText.textContent = "Replace (Texture Only)";
+        modeText.style.color = "#cc6600";
+    } else {
+        modeText.textContent = "Modulate (Texture × Lighting)";
+        modeText.style.color = "#006600";
+    }
+}
+
+// Handle key press
 function handleKeyDown(event) {
-    
     const modelEnum = {TRIANGLES: "triangles", ELLIPSOID: "ellipsoid"};
     const dirEnum = {NEGATIVE: -1, POSITIVE: 1};
     
@@ -702,11 +700,14 @@ function handleKeyDown(event) {
             highlightModel(modelEnum.ELLIPSOID,(handleKeyDown.whichOn > 0) ? handleKeyDown.whichOn-1 : numEllipsoids-1);
             break;
             
+        // BLEND MODE TOGGLE
         case "KeyB":
             blendMode = (blendMode + 1) % 2;
-            console.log("Blend mode: " + (blendMode === 0 ? "Replace (texture only)" : "Modulate (texture * lighting)"));
+            console.log("Blend mode: " + (blendMode === 0 ? "Replace (texture only)" : "Modulate (texture × lighting)"));
+            updateModeIndicator();
             break;
             
+        // View controls
         case "KeyA":
             Center = vec3.add(Center,Center,vec3.scale(temp,viewRight,viewDelta));
             if (!event.getModifierState("Shift"))
@@ -757,6 +758,7 @@ function handleKeyDown(event) {
             Up = vec3.copy(Up,defaultUp);
             break;
             
+        // Model transformation
         case "KeyK":
             if (event.getModifierState("Shift"))
                 rotateModel(Up,dirEnum.NEGATIVE);
@@ -808,12 +810,13 @@ function handleKeyDown(event) {
     }
 }
 
+// Setup WebGL
 function setupWebGL() {
     document.onkeydown = handleKeyDown;
 
     var imageCanvas = document.getElementById("myImageCanvas");
     var cw = imageCanvas.width, ch = imageCanvas.height; 
-    imageContext = imageCanvas.getContext("2d"); 
+    var imageContext = imageCanvas.getContext("2d"); 
     var bkgdImage = new Image(); 
     bkgdImage.crossOrigin = "Anonymous";
     bkgdImage.src = "https://ncsucgclass.github.io/prog3/sky.jpg";
@@ -832,17 +835,13 @@ function setupWebGL() {
             gl.clearColor(0.0, 0.0, 0.0, 0.0);
             gl.clearDepth(1.0);
             gl.enable(gl.DEPTH_TEST);
-            
-            // Enable blending for transparency
-            gl.enable(gl.BLEND);
-            gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
         }
-    }
-    catch(e) {
+    } catch(e) {
         console.log(e);
     }
 }
 
+// Load models
 function loadModels() {
     inputTriangles = getJSONFile(INPUT_TRIANGLES_URL,"triangles");
 
@@ -850,12 +849,7 @@ function loadModels() {
         if (inputTriangles == String.null)
             throw "Unable to load triangles file!";
         else {
-            var whichSetVert;
-            var whichSetTri;
-            var vtxToAdd;
-            var normToAdd;
-            var uvToAdd;
-            var triToAdd;
+            var whichSetVert, whichSetTri, vtxToAdd, normToAdd, uvToAdd, triToAdd;
             var maxCorner = vec3.fromValues(Number.MIN_VALUE,Number.MIN_VALUE,Number.MIN_VALUE);
             var minCorner = vec3.fromValues(Number.MAX_VALUE,Number.MAX_VALUE,Number.MAX_VALUE);
         
@@ -908,22 +902,18 @@ function loadModels() {
                 gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(inputTriangles[whichSet].glTriangles),gl.STATIC_DRAW);
 
                 var textureURL = inputTriangles[whichSet].material.texture;
-                // Add base URL if texture path is relative
-                if (!textureURL.startsWith('http')) {
-                    textureURL = "https://ncsucgclass.github.io/prog4/" + textureURL;
-                }
                 textureBuffers[whichSet] = loadTexture(textureURL);
             }
         
             var temp = vec3.create();
             viewDelta = vec3.length(vec3.subtract(temp,maxCorner,minCorner)) / 100;
         }
-    }
-    catch(e) {
+    } catch(e) {
         console.log(e);
     }
 }
 
+// Setup shaders
 function setupShaders() {
     var vShaderCode = `
         attribute vec3 aVertexPosition;
@@ -960,7 +950,6 @@ function setupShaders() {
         uniform vec3 uDiffuse;
         uniform vec3 uSpecular;
         uniform float uShininess;
-        uniform float uAlpha;
         uniform int uBlendMode;
         
         varying vec3 vWorldPos;
@@ -976,17 +965,19 @@ function setupShaders() {
             vec3 R = reflect(-L, N);
             
             vec3 ambient = uAmbient * uLightAmbient;
+            
             float diffuseFactor = max(dot(N, L), 0.0);
             vec3 diffuse = uDiffuse * uLightDiffuse * diffuseFactor;
+            
             float specularFactor = pow(max(dot(R, V), 0.0), uShininess);
             vec3 specular = uSpecular * uLightSpecular * specularFactor;
             
             vec3 litColor = ambient + diffuse + specular;
             
             if (uBlendMode == 0) {
-                gl_FragColor = vec4(texColor.rgb, texColor.a * uAlpha);
+                gl_FragColor = texColor;
             } else {
-                gl_FragColor = vec4(texColor.rgb * litColor, texColor.a * uAlpha);
+                gl_FragColor = vec4(texColor.rgb * litColor, texColor.a);
             }
         }
     `;
@@ -1038,16 +1029,15 @@ function setupShaders() {
                 diffuseULoc = gl.getUniformLocation(shaderProgram, "uDiffuse");
                 specularULoc = gl.getUniformLocation(shaderProgram, "uSpecular");
                 shininessULoc = gl.getUniformLocation(shaderProgram, "uShininess");
-                alphaULoc = gl.getUniformLocation(shaderProgram, "uAlpha");
                 blendModeULoc = gl.getUniformLocation(shaderProgram, "uBlendMode");
             }
         }
-    }
-    catch(e) {
+    } catch(e) {
         console.log(e);
     }
 }
 
+// Render models
 function renderModels() {
     function makeModelTransform(currModel) {
         var zAxis = vec3.create(), sumRotation = mat4.create(), temp = mat4.create(), negCtr = vec3.create();
@@ -1131,5 +1121,6 @@ function main() {
     setupWebGL();
     loadModels();
     setupShaders();
+    updateModeIndicator();
     renderModels();
 }
