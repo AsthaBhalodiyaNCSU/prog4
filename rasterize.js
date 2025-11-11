@@ -653,6 +653,11 @@ var lightSpecular = vec3.fromValues(1, 1, 1);
 /* blending mode */
 var blendMode = 0; // 0 = replace (texture only), 1 = modulate (texture * lighting), 2 = modulate with transparency
 
+/* animation variables */
+var animationActive = false;
+var animationTime = 0;
+var animationDuration = 4.0; // 4 seconds for full cycle
+
 /* webgl and geometry data */
 var gl = null;
 var inputTriangles = [];
@@ -746,6 +751,24 @@ function handleKeyDown(event) {
     
     const modelEnum = {TRIANGLES: "triangles", ELLIPSOID: "ellipsoid"};
     const dirEnum = {NEGATIVE: -1, POSITIVE: 1};
+    
+    // ANIMATION TOGGLE - Press ! to start London Bridge animation
+    if (event.key === "!") {
+        animationActive = !animationActive;
+        if (animationActive) {
+            animationTime = 0;
+            console.log("London Bridge animation started!");
+        } else {
+            console.log("Animation stopped");
+            // Reset all models to original positions
+            for (var whichTriSet=0; whichTriSet<numTriangleSets; whichTriSet++) {
+                vec3.set(inputTriangles[whichTriSet].translation,0,0,0);
+                vec3.set(inputTriangles[whichTriSet].xAxis,1,0,0);
+                vec3.set(inputTriangles[whichTriSet].yAxis,0,1,0);
+            }
+        }
+        return;
+    }
     
     function highlightModel(modelType,whichModel) {
         if (handleKeyDown.modelOn != null)
@@ -1210,6 +1233,17 @@ function renderModels() {
     
     window.requestAnimationFrame(renderModels);
     
+    // Update animation if active
+    if (animationActive) {
+        animationTime += 0.016; // approximately 60fps
+        if (animationTime > animationDuration) {
+            animationTime = 0; // Loop animation
+        }
+        
+        // Apply London Bridge breaking and rebuilding animation
+        applyBridgeAnimation(animationTime);
+    }
+    
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     
     mat4.perspective(pMatrix,0.5*Math.PI,1,0.1,10);
@@ -1255,6 +1289,102 @@ function renderModels() {
         for (var whichTriSet=0; whichTriSet<numTriangleSets; whichTriSet++) {
             renderModel(whichTriSet, pMatrix, vMatrix, pvMatrix);
         }
+    }
+}
+
+// Apply London Bridge breaking and rebuilding animation
+function applyBridgeAnimation(time) {
+    if (numTriangleSets < 3) return;
+    
+    var halfDuration = animationDuration / 2;
+    var progress;
+    
+    // First half: bridge breaks apart (falling down)
+    if (time < halfDuration) {
+        progress = time / halfDuration; // 0 to 1
+        
+        // Ease out cubic for dramatic fall
+        var easeProgress = 1 - Math.pow(1 - progress, 3);
+        
+        // Object 0 (left piece): Falls down and rotates left
+        var fallDistance0 = easeProgress * -0.5;
+        var rotateAmount0 = easeProgress * Math.PI * 0.4;
+        vec3.set(inputTriangles[0].translation, -easeProgress * 0.3, fallDistance0, 0);
+        
+        var rotMat0 = mat4.create();
+        mat4.fromRotation(rotMat0, -rotateAmount0, [0, 0, 1]);
+        var xAxis0 = vec3.fromValues(1, 0, 0);
+        var yAxis0 = vec3.fromValues(0, 1, 0);
+        vec3.transformMat4(inputTriangles[0].xAxis, xAxis0, rotMat0);
+        vec3.transformMat4(inputTriangles[0].yAxis, yAxis0, rotMat0);
+        
+        // Object 1 (middle piece): Falls straight down faster with spin
+        var fallDistance1 = easeProgress * -0.7;
+        var spinAmount1 = easeProgress * Math.PI * 2;
+        vec3.set(inputTriangles[1].translation, 0, fallDistance1, easeProgress * 0.1);
+        
+        var rotMat1 = mat4.create();
+        mat4.fromRotation(rotMat1, spinAmount1, [0, 1, 0]);
+        var xAxis1 = vec3.fromValues(1, 0, 0);
+        var yAxis1 = vec3.fromValues(0, 1, 0);
+        vec3.transformMat4(inputTriangles[1].xAxis, xAxis1, rotMat1);
+        vec3.transformMat4(inputTriangles[1].yAxis, yAxis1, rotMat1);
+        
+        // Object 2 (right piece): Falls down and rotates right
+        var fallDistance2 = easeProgress * -0.6;
+        var rotateAmount2 = easeProgress * Math.PI * 0.5;
+        vec3.set(inputTriangles[2].translation, easeProgress * 0.4, fallDistance2, -easeProgress * 0.1);
+        
+        var rotMat2 = mat4.create();
+        mat4.fromRotation(rotMat2, rotateAmount2, [0, 0, 1]);
+        var xAxis2 = vec3.fromValues(1, 0, 0);
+        var yAxis2 = vec3.fromValues(0, 1, 0);
+        vec3.transformMat4(inputTriangles[2].xAxis, xAxis2, rotMat2);
+        vec3.transformMat4(inputTriangles[2].yAxis, yAxis2, rotMat2);
+        
+    } else {
+        // Second half: bridge rebuilds itself (rising up)
+        progress = (time - halfDuration) / halfDuration; // 0 to 1
+        
+        // Ease in cubic for smooth reconstruction
+        var easeProgress = Math.pow(progress, 2);
+        var reverseProgress = 1 - easeProgress;
+        
+        // Object 0: Rises and rotates back to original position
+        var fallDistance0 = reverseProgress * -0.5;
+        var rotateAmount0 = reverseProgress * Math.PI * 0.4;
+        vec3.set(inputTriangles[0].translation, -reverseProgress * 0.3, fallDistance0, 0);
+        
+        var rotMat0 = mat4.create();
+        mat4.fromRotation(rotMat0, -rotateAmount0, [0, 0, 1]);
+        var xAxis0 = vec3.fromValues(1, 0, 0);
+        var yAxis0 = vec3.fromValues(0, 1, 0);
+        vec3.transformMat4(inputTriangles[0].xAxis, xAxis0, rotMat0);
+        vec3.transformMat4(inputTriangles[0].yAxis, yAxis0, rotMat0);
+        
+        // Object 1: Rises and un-spins
+        var fallDistance1 = reverseProgress * -0.7;
+        var spinAmount1 = reverseProgress * Math.PI * 2;
+        vec3.set(inputTriangles[1].translation, 0, fallDistance1, reverseProgress * 0.1);
+        
+        var rotMat1 = mat4.create();
+        mat4.fromRotation(rotMat1, spinAmount1, [0, 1, 0]);
+        var xAxis1 = vec3.fromValues(1, 0, 0);
+        var yAxis1 = vec3.fromValues(0, 1, 0);
+        vec3.transformMat4(inputTriangles[1].xAxis, xAxis1, rotMat1);
+        vec3.transformMat4(inputTriangles[1].yAxis, yAxis1, rotMat1);
+        
+        // Object 2: Rises and rotates back
+        var fallDistance2 = reverseProgress * -0.6;
+        var rotateAmount2 = reverseProgress * Math.PI * 0.5;
+        vec3.set(inputTriangles[2].translation, reverseProgress * 0.4, fallDistance2, -reverseProgress * 0.1);
+        
+        var rotMat2 = mat4.create();
+        mat4.fromRotation(rotMat2, rotateAmount2, [0, 0, 1]);
+        var xAxis2 = vec3.fromValues(1, 0, 0);
+        var yAxis2 = vec3.fromValues(0, 1, 0);
+        vec3.transformMat4(inputTriangles[2].xAxis, xAxis2, rotMat2);
+        vec3.transformMat4(inputTriangles[2].yAxis, yAxis2, rotMat2);
     }
 }
 
